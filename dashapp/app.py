@@ -24,6 +24,13 @@ app.layout = html.Div([
 
     html.Div(id='mongo-datatable', children=[]),
 
+    dcc.Dropdown(
+            options=[],
+            value=[],
+            multi=True,
+            id='game-picker'
+        ),
+
     html.Div(id='mongo-Graph', children=[]),
 
     # activated once/week or when page refreshed
@@ -35,25 +42,37 @@ app.layout = html.Div([
 ])
 
 @app.callback(Output('mongo-Graph', 'children'),
-              [Input('interval_db', 'n_intervals')])
-def create_graph(n_intervals):
-    df = pd.DataFrame.from_records(db.historical_pbp_modelled.find({'GAME_ID':21500105}))
-    df = df.drop('_id', axis = 1)
-    fig = plot_game(df)
+              [Input('game-picker', 'value')])
+def create_graph(value):
+    print(value)
+    return_graphs = []
+    for i in range(len(value)):
+        game_id = value[i]
+        df = pd.DataFrame.from_records(db.historical_pbp_modelled.find({'GAME_ID':game_id}))
+        print(df.shape)
+        df = df.drop('_id', axis = 1)
+        fig = plot_game(df)
+        return_graphs.append(dcc.Graph(id=f'example_graph_{i}',figure = fig))
 
-    return [dcc.Graph(
-        id='example_graph',
-        figure = fig
-    )
-    ]
+    return return_graphs
 
+@app.callback(Output('game-picker', 'options'), 
+              [Input("mongo-datatable", "children")])
+def fill_game_select(children):
+    data = children[0]['props']['data']
+
+    options = []
+    for i in range(len(data)):
+        option = {'label': data[i]['MATCHUP'], 'value':data[i]['GAME_ID']}
+        options.append(option)
+
+    return options
 
 
 @app.callback(Output('mongo-datatable', 'children'),
               [Input('date-picker', 'date')])
 def populate_datatable(date):
     if date:
-        print(type(date))
         # Convert the Collection (table) date to a pandas DataFrame
         df = pd.DataFrame.from_records(db.game_log.find({'GAME_DATE': date}))
         #Drop the _id column generated automatically by Mongo
