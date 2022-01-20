@@ -36,8 +36,7 @@ def update_game_log():
 
         df = games_to_update_df.merge(elo, 
                              left_on=['GAME_DATE', 'Home'], 
-                             right_on = ['date', 'team1'])[['GAME_ID', 'elo1_pre', 'elo2_pre', 
-                                                           'elo_difference', 'home_team_win']]
+                             right_on = ['date', 'team1'])[['GAME_ID', 'elo1_pre', 'elo2_pre', 'home_team_win', 'MATCHUP']]
 
         pbps = []
         for g_id in df['GAME_ID'].unique():
@@ -45,7 +44,8 @@ def update_game_log():
             sleep(0.5)
 
         pbp_df = pd.concat(pbps).astype({'GAME_ID':int})
-        pbp_df_prepped = feature_engineer(pbp_df)
+        pbp_df_prepped = pbp_df.groupBy('GAME_ID').apply(feature_engineer).reset_index(drop=True)
+
         final_df = pbp_df_prepped.merge(df, on=['GAME_ID'])
 
         wEloCols = ['home_poss', 'diff', 'time_remaining', 'OT_ind', 'elo1_pre', 'elo2_pre']
