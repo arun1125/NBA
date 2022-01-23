@@ -1,2 +1,6 @@
 client
 Data
+*.cer
+*.pem
+*.csv
+aws_secrets.py

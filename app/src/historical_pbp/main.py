@@ -20,12 +20,14 @@ router = APIRouter(
 scheduler = BackgroundScheduler()
 scheduler.configure(timezone=utc)
 
-def myfunc():
-    update_game_log()
+# def myfunc():
+#     update_game_log()
 
-job = scheduler.add_job(myfunc, 'interval', hours=1, id='update_game_log')
-scheduler.start()
+# job = scheduler.add_job(myfunc, 'interval', minutes=1, id='update_game_log')
+# scheduler.start()
 # scheduler.shutdown()
+
+
 
 
 @router.get("/")

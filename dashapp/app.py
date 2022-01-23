@@ -49,6 +49,8 @@ def create_graph(value):
         game_id = value[i]
         df = pd.DataFrame.from_records(db.historical_pbp_modelled.find({'GAME_ID':game_id}))
         game_info = pd.DataFrame.from_records(db.game_log.find({'GAME_ID':game_id}))
+        print(df.shape)
+        print(game_info)
         if '_id' in df.columns:
             df = df.drop('_id', axis = 1)
         fig = plot_game(df, game_info)

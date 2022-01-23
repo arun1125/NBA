@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.game_log import main as game_log_main
 from src.historical_pbp import main as historical_pbp_main
+from src.historical_pbp.background import update_game_log
+
 
 app = FastAPI()
 

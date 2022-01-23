@@ -33,7 +33,8 @@ def load_game(game_id):
     home_team_name = pbp['PLAYER1_TEAM_ABBREVIATION'].dropna().iloc[0]
     return pbp, home_team_name
 
-def feature_engineer(pbp):
+def feature_engineer(df):
+    pbp = df.copy()
     pbp[['home_true', 'visitor_true']] = pbp[['HOMEDESCRIPTION','VISITORDESCRIPTION']].notnull().astype(int)
     pbp['block'] = pbp['HOMEDESCRIPTION'].str.contains("BLOCK").fillna(False)
     pbp['steal'] = pbp['HOMEDESCRIPTION'].str.contains("STEAL").fillna(False)
@@ -46,6 +47,6 @@ def feature_engineer(pbp):
     pbp['seconds_left_in_game_from_quarter'] = pbp['PERIOD'].apply(find_seconds_left)
     pbp['time_remaining'] = pbp['seconds'] + pbp['seconds_left_in_game_from_quarter']
 
-    game = pbp[['home_poss', 'diff', 'time_remaining', 'OT_ind']]
+    game = pbp[['GAME_ID', 'home_poss', 'diff', 'time_remaining', 'OT_ind']]
     
     return game
