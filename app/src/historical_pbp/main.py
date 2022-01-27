@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from src.historical_pbp.background import update_game_log
-from src.database import db
+from src.database import historical_pbp_modelled_db, game_log_db
+from boto3.dynamodb.conditions import Key
 import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from pytz import utc
@@ -37,19 +38,22 @@ async def read_root():
 
 @router.get("/{game_id}")
 async def fetch_game(game_id:int):
-    data = db.historical_pbp.find({"GAME_ID":game_id})
+    data = historical_pbp_modelled_db.query(KeyConditionExpression=Key('GAME_ID').eq(game_id))['Items']
     pbps_df = pd.DataFrame.from_records(data)
-    return pbps_df.drop('_id', axis = 1).to_json(orient='records')
+    return pbps_df.to_json(orient='records')
 
 
 @router.get("/predictions/{game_id}")
 async def fetch_preds(game_id:int):
-    preds = pd.DataFrame.from_records(db.historical_pbp_modelled.find({"GAME_ID":game_id}))
-    game_log = pd.DataFrame.from_records(db.game_log.find({'GAME_ID':game_id}))
+    preds = pd.DataFrame(historical_pbp_modelled_db.query(KeyConditionExpression=Key('GAME_ID').eq(game_id))['Items'])
+
+    game_log = pd.DataFrame(game_log_db.query(
+        IndexName="GameIdIndex",
+        KeyConditionExpression=Key('GAME_ID').eq(game_id))['Items'])
 
     resp = preds.merge(game_log[['TEAM_ABBREVIATION', 'TEAM_NAME', 'GAME_DATE', 'GAME_ID', 'MATCHUP']],
            on=['GAME_ID'])
 
-    return resp.drop('_id', axis = 1).to_json(orient='records')
+    return resp.to_json(orient='records')
 
 

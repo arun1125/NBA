@@ -4,3 +4,9 @@ Data
 *.pem
 *.csv
 aws_secrets.py
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+env_vars
+.dockerignore

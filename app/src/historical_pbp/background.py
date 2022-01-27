@@ -1,4 +1,3 @@
-from src.database import db
 import pandas as pd
 import numpy as np
 from nba_api.stats.endpoints import playbyplayv2, leaguegamelog, leaguegamefinder
@@ -6,36 +5,61 @@ from src.historical_pbp.helper import feature_engineer
 from src.utilities import read_url_to_csv, elo_url
 from time import sleep
 import tensorflow as tf
+import json
+from decimal import Decimal
+from src.database import historical_pbp_modelled_db, game_log_db
+
+def load_all_game_log():
+    response = game_log_db.scan()
+    result = response['Items']
+
+    while 'LastEvaluatedKey' in response:
+        response = game_log_db.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        result.extend(response['Items'])
+    return pd.DataFrame(result)
+
+def process_new_games(new_games):
+    new_games[['Home', 'Away']] = new_games['MATCHUP'].str.split('vs.', expand=True)
+    new_games.loc[:, 'Home'] = new_games['Home'].str.strip()
+    new_games.loc[:, 'home_team_win'] = new_games['WL'].replace({'W':1, 'L':0})
+    new_games = new_games.dropna(subset=['home_team_win'])
+    return new_games
+
+def preprocess_elo(elo_df):
+    elo_df = elo_df[elo_df['date'] > '2012-01-01']
+    elo_df.loc[:, 'elo_difference'] = np.abs(elo_df['elo1_pre'] - elo_df['elo2_pre'])
+    elo_df = elo_df[['date', 'team1', 'elo1_pre', 'elo2_pre', 'elo_difference']]
+    elo_df['team1'] = elo_df['team1'].replace({'BRK':'BKN', 'PHO':'PHX', 'CHO':'CHA',})
+    return elo_df
+
+def upload_data_to_dynamoDB(df, db, check_col):
+    df_dict = df[~df[check_col].isna()].to_dict('records')
+    df_json = [json.loads(json.dumps(item), parse_float=Decimal) for item in df_dict]
+    with db.batch_writer() as batch:
+        for i in range(len(df_json)):
+            batch.put_item(Item = df_json[i])
+
+    print('uploaded data!')
+
 
 def update_game_log():
     print('getting nba_game log')
-    gl = pd.DataFrame.from_records(db.game_log.find())
+    gl = load_all_game_log()
     lgl = leaguegamelog.LeagueGameLog().get_data_frames()[0].astype({'GAME_ID':int})
 
     games_to_update = set(lgl['GAME_ID']).difference(set(gl['GAME_ID']))
     
     if games_to_update:
         print(f'there are {len(games_to_update)} games to update')
+
         games_to_update_df = lgl[(lgl['GAME_ID'].isin(games_to_update))&\
             (~lgl['MATCHUP'].str.contains('@'))]
         
-        games_to_update_df[['Home', 'Away']] = games_to_update_df['MATCHUP'].str.split('vs.', expand=True)
-        games_to_update_df.loc[:, 'Home'] = games_to_update_df['Home'].str.strip()
-        games_to_update_df.loc[:, 'home_team_win'] = games_to_update_df['WL'].replace({'W':1, 'L':0})
-        games_to_update_df = games_to_update_df.dropna(subset=['home_team_win'])
+        games_to_update_df = process_new_games(games_to_update_df)
         print('finished preprocessing the game log')
 
         elo = read_url_to_csv(elo_url)
-        elo = elo[elo['date'] > '2012-01-01']
-
-        elo.loc[:, 'elo_difference'] = np.abs(elo['elo1_pre'] - elo['elo2_pre'])
-
-        elo = elo[['date', 'team1', 'elo1_pre', 'elo2_pre', 'elo_difference']]
-
-        elo['team1'] = elo['team1'].replace({'BRK':'BKN',
-                                            'PHO':'PHX',
-                                            'CHO':'CHA',})
-
+        elo = preprocess_elo(elo)
         print('preprocessed elo')
 
         df = games_to_update_df.merge(elo, 
@@ -49,10 +73,13 @@ def update_game_log():
             sleep(0.5)
         if len(pbps) == 0:
             return
+
         print('merge all play by plays into one game log')
         pbp_df = pd.concat(pbps).astype({'GAME_ID':int})
+
         print('create our features for each game')
         pbp_df_prepped = pbp_df.groupby('GAME_ID').apply(feature_engineer).reset_index(drop=True)
+        pbp_df_prepped['PLAY_NUMBER'] = pbp_df_prepped.groupby('GAME_ID').cumcount()
 
         print('merge our game log with elo and feature engineered play by play data')
         final_df = pbp_df_prepped.merge(df, on=['GAME_ID'])
@@ -67,10 +94,9 @@ def update_game_log():
         final_df.loc[:, 'preds_w_elo'] = model.predict_on_batch(final_df[wEloCols])
         final_df.loc[:, 'preds_wO_elo'] = model_wO_elo.predict_on_batch(final_df[wOEloCols])
 
-        # db.historical_pbp_modelled.insert_many(final_df.to_dict('records'))
-        # db.game_log.insert_many(games_to_update_df.to_dict('records'))
-        # db.historical_pbp.insert_many(pbp_df.to_dict('records'))
-
+        upload_data_to_dynamoDB(games_to_update_df, game_log_db, 'home_team_win')
+        upload_data_to_dynamoDB(final_df, historical_pbp_modelled_db, 'home_team_win')
+        
         print('Games Updated!')
 
     else:

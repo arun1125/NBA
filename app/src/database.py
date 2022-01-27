@@ -1,7 +1,6 @@
-from pymongo import MongoClient
-import os
-# client = MongoClient('localhost', 27017)
-# database_url = 
-client = MongoClient('mongodb://localhost:27017')
-db = client['NBA']
+import boto3
+
+dynamoDB = boto3.resource('dynamodb', region_name = 'us-east-2')
+game_log_db = dynamoDB.Table('game_log')
+historical_pbp_modelled_db = dynamoDB.Table('historical_pbp_modelled')
 
