@@ -7,11 +7,12 @@ from dash import html
 from dash.dependencies import Input, Output, State
 from dash import dash_table
 from helper import plot_game
-from pymongo import MongoClient
+import boto3
+from boto3.dynamodb.conditions import Key
 
-
-client = MongoClient('localhost', 27017)
-db = client['NBA']
+dynamoDB = boto3.resource('dynamodb', region_name = 'us-east-2')
+game_log_db = dynamoDB.Table('game_log')
+historical_pbp_modelled_db = dynamoDB.Table('historical_pbp_modelled')
 
 app = dash.Dash(__name__)
 
@@ -47,12 +48,12 @@ def create_graph(value):
     return_graphs = []
     for i in range(len(value)):
         game_id = value[i]
-        df = pd.DataFrame.from_records(db.historical_pbp_modelled.find({'GAME_ID':game_id}))
-        game_info = pd.DataFrame.from_records(db.game_log.find({'GAME_ID':game_id}))
-        print(df.shape)
-        print(game_info)
-        if '_id' in df.columns:
-            df = df.drop('_id', axis = 1)
+        df = pd.DataFrame(historical_pbp_modelled_db.query(KeyConditionExpression=Key('GAME_ID').eq(game_id))['Items'])
+
+        game_info = pd.DataFrame(game_log_db.query(
+            IndexName="GameIdIndex",
+            KeyConditionExpression=Key('GAME_ID').eq(game_id))['Items'])
+
         fig = plot_game(df, game_info)
         return_graphs.append(dcc.Graph(id=f'example_graph_{i}',figure = fig))
 
@@ -79,10 +80,8 @@ def fill_game_select(children):
               [Input('date-picker', 'date')])
 def populate_datatable(date):
     if date:
-        # Convert the Collection (table) date to a pandas DataFrame
-        df = pd.DataFrame.from_records(db.game_log.find({'GAME_DATE': date}))
-        #Drop the _id column generated automatically by Mongo
-        # df = df.drop('_id', axis = 1)
+        data = game_log_db.query(KeyConditionExpression=Key('GAME_DATE').eq(date))['Items']
+        df = pd.DataFrame.from_records(data)
 
         return [
             dash_table.DataTable(
@@ -90,8 +89,8 @@ def populate_datatable(date):
                 columns=[{
                     'name': x,
                     'id': x,
-                } for x in df.drop('_id', axis = 1).columns],
-                data=df.drop('_id', axis = 1).to_dict('records'),
+                } for x in df.columns],
+                data=df.to_dict('records'),
                 editable=True,
                 row_deletable=True,
                 filter_action="native",
