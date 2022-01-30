@@ -94,8 +94,9 @@ def update_game_log():
         final_df.loc[:, 'preds_w_elo'] = model.predict_on_batch(final_df[wEloCols])
         final_df.loc[:, 'preds_wO_elo'] = model_wO_elo.predict_on_batch(final_df[wOEloCols])
 
-        upload_data_to_dynamoDB(games_to_update_df, game_log_db, 'home_team_win')
-        upload_data_to_dynamoDB(final_df, historical_pbp_modelled_db, 'home_team_win')
+        
+        # upload_data_to_dynamoDB(games_to_update_df, game_log_db, 'home_team_win')
+        # upload_data_to_dynamoDB(final_df, historical_pbp_modelled_db, 'home_team_win')
         
         print('Games Updated!')
 
