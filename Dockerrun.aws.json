@@ -1,7 +1,7 @@
 {
     "AWSEBDockerrunVersion": "1",
     "Image": {
-      "Name": "arun1995plus1/nbabackend",
+      "Name": "030942281737.dkr.ecr.us-east-2.amazonaws.com/nba:latest",
       "Update": "true"
     },
     "Ports": [

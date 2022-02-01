@@ -6,8 +6,10 @@ from src.utilities import read_url_to_csv, elo_url
 from time import sleep
 import tensorflow as tf
 import json
+import os
 from decimal import Decimal
 from src.database import historical_pbp_modelled_db, game_log_db
+import boto3
 
 def load_all_game_log():
     response = game_log_db.scan()
@@ -40,6 +42,26 @@ def upload_data_to_dynamoDB(df, db, check_col):
             batch.put_item(Item = df_json[i])
 
     print('uploaded data!')
+
+def load_models():
+    client = boto3.client('s3')
+    
+    client.download_file('arun-nba','Models/TF_model_wO_elo.h5','model_wO_elo.h5')
+    client.download_file('arun-nba','Models/TF_model_w_elo.h5','model_w_elo.h5')
+    
+    model_wO_elo = tf.keras.models.load_model('model_wO_elo.h5')
+    model_w_elo = tf.keras.models.load_model('model_w_elo.h5')
+
+    return model_w_elo, model_wO_elo
+    
+def del_models():
+    if os.path.exists('model_wO_elo.h5'):
+        os.remove('model_wO_elo.h5')
+
+    if os.path.exists('model_w_elo.h5'):
+        os.remove('model_w_elo.h5')
+
+    print('models deleted!')
 
 
 def update_game_log():
@@ -88,17 +110,18 @@ def update_game_log():
         wOEloCols = ['home_poss', 'diff', 'time_remaining', 'OT_ind']
 
         print('run model to get predictions')
-        model = tf.keras.models.load_model('./app/src/Models/TF_model_w_elo.h5')
-        model_wO_elo = tf.keras.models.load_model('./app/src/Models/TF_model_wO_elo.h5')
+        # model = tf.keras.models.load_model('./app/src/Models/TF_model_w_elo.h5')
+        # model_wO_elo = tf.keras.models.load_model('./app/src/Models/TF_model_wO_elo.h5')
+        model_w_elo, model_wO_elo = load_models()
 
-        final_df.loc[:, 'preds_w_elo'] = model.predict_on_batch(final_df[wEloCols])
+        final_df.loc[:, 'preds_w_elo'] = model_w_elo.predict_on_batch(final_df[wEloCols])
         final_df.loc[:, 'preds_wO_elo'] = model_wO_elo.predict_on_batch(final_df[wOEloCols])
 
-        
         # upload_data_to_dynamoDB(games_to_update_df, game_log_db, 'home_team_win')
         # upload_data_to_dynamoDB(final_df, historical_pbp_modelled_db, 'home_team_win')
         
         print('Games Updated!')
+        del_models()
 
     else:
         print('Games didnt Update')

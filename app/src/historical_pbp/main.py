@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from src.historical_pbp.background import update_game_log
+# from NBA.app.src.historical_pbp.background import del_models
+from src.historical_pbp.background import update_game_log, load_models, del_models
 from src.database import historical_pbp_modelled_db, game_log_db
 from boto3.dynamodb.conditions import Key
 import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from pytz import utc
+from time import sleep
 
 
 router = APIRouter(
@@ -24,7 +26,7 @@ scheduler.configure(timezone=utc)
 def myfunc():
     update_game_log()
 
-job = scheduler.add_job(myfunc, 'interval', hours=24, id='update_game_log')
+job = scheduler.add_job(myfunc, 'interval', minutes = 1, id='update_game_log')
 scheduler.start()
 # scheduler.shutdown()
 
@@ -33,6 +35,10 @@ scheduler.start()
 
 @router.get("/")
 async def read_root():
+    load_models()
+    print('models are loaded')
+    sleep(10)
+    del_models()
     return {"Message": "this is the historical play by play router"}
 
 
